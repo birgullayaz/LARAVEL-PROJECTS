@@ -1,0 +1,14 @@
+version: "3.8"
+services:
+  api:
+    container_name: saide-backoffice
+    image: saide044/saide-backoffice
+    ports:
+      - 8001:8001
+    extra_hosts:
+      - "server:192.168.1.2"
+    networks:
+      - dockernet
+networks:
+  dockernet:
+    driver: bridge

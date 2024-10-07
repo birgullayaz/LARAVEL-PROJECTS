@@ -1,0 +1,70 @@
+image: atlassian/default-image:2
+options:
+  docker: true
+  size: 2x
+pipelines:
+  branches:
+    master:
+    - step:
+        name: Analyze / Build / Dockerize
+        max-time: 15
+        script:
+          - docker login -u $DOCKER_HUB_USERNAME -p $DOCKER_HUB_PASSWORD
+          - docker build -f Dockerfile -t $IMAGE_NAME:latest .
+          - docker push $IMAGE_NAME:latest
+    - parallel:
+        - step:
+            name: Deploy To Development
+            deployment: Development
+            trigger: manual
+            script:
+               - apt-get update -qq && apt-get install -y -qq ssh-askpass
+               - mkdir -p ~/.ssh
+               - cat known_hosts >> ~/.ssh/known_hosts
+               - (umask  077 ; echo $BASED_DEV_SSH_KEY | base64 --decode > ~/.ssh/id_rsa)
+               - ssh root@176.235.139.163 'cd /home/vcloud/backoffice/saide-backoffice; bash deploy-docker.sh'
+    staging:
+    - step:
+        name: Analyze / Build / Dockerize
+        max-time: 15
+        script:
+          - docker login -u $DOCKER_HUB_USERNAME -p $DOCKER_HUB_PASSWORD
+          - docker build -t $IMAGE_NAME_TEST:latest .
+          - docker push $IMAGE_NAME_TEST:latest
+    - step:
+            name: Deploy To Test Server
+            deployment: Staging 
+            trigger: manual
+            script:
+               - apt-get update -qq && apt-get install -y -qq ssh-askpass
+               - mkdir -p ~/.ssh
+               - cat known_hosts >> ~/.ssh/known_hosts
+               - (umask  077 ; echo $BASED_TEST_SSH_KEY | base64 --decode > ~/.ssh/id_rsa)
+               - ssh root@176.235.139.165 'cd /home/vcloud/backoffice/saide-backoffice; bash deploy-docker.sh'
+    production:
+    - step:
+        name: Analyze / Build / Dockerize
+        max-time: 15
+        script:
+          - docker login -u $DOCKER_HUB_USERNAME -p $DOCKER_HUB_PASSWORD
+          - docker build -t $IMAGE_NAME_PROD:latest .
+          - docker push $IMAGE_NAME_PROD:latest
+    - step:
+            name: Check Before Deploy Production
+            trigger: manual
+            script:
+               - echo 'You can deploy to production server. Please be careful about it!'
+    - step:
+            name: Deploy To Production Server
+            deployment: Production
+            trigger: manual
+            script:
+               - apt-get update -qq && apt-get install -y -qq ssh-askpass
+               - mkdir -p ~/.ssh
+               - cat known_hosts >> ~/.ssh/known_hosts
+               - (umask  077 ; echo $BASED_PROD_SSH_KEY | base64 --decode > ~/.ssh/id_rsa)
+               - ssh root@176.235.139.164 'cd /home/vcloud/backoffice/saide-backoffice; bash deploy-docker.sh' 
+definitions:
+  services:
+    docker: 
+      memory: 4096
